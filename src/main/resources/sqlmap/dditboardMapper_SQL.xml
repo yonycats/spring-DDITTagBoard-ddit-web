@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="kr.or.ddit.mapper.IDDITBoardMapper">
+	
+	<sql id="boardSearch">
+		<if test="searchWord != null and searchType == 'title'">
+			and (bo_title like '%' || #{searchWord} || '%')
+		</if>
+		<if test="searchWord != null and searchType == 'writer'">
+			and (bo_writer like '%' || #{searchWord} || '%')
+		</if>
+		<if test="searchWord != null and searchType == 'both'">
+			and ((bo_title like '%' || #{searchWord} || '%')
+			or (bo_writer like '%' || #{searchWord} || '%'))
+		</if>
+	</sql>
+	
+	<update id="increaseHit" parameterType="int">
+		update dditboard 
+		set bo_hit = bo_hit + 1
+		where bo_no = #{boNo}
+	</update>
+	
+	<!-- 참조 테이블 값을 하나의 VO로 받기 위해서는 collection 태그와, join 쿼리가 필요함 -->
+	<select id="selectDetail" parameterType="int" resultMap="boardMap">
+		select b.bo_no, b.bo_title, b.bo_content, b.bo_writer, b.bo_date, b.bo_hit, t.tag
+		from dditboard b left outer join ddittag t on(b.bo_no = t.bo_no)
+		where b.bo_no = #{boNo}
+	</select>
+	
+	<resultMap type="DDITBoardVO" id="boardMap">
+		<id property="boNo" column="bo_no"/>
+		<result property="boTitle" column="bo_title"/>
+		<result property="boContent" column="bo_content"/>
+		<result property="boWriter" column="bo_writer"/>
+		<result property="boDate" column="bo_date"/>
+		<result property="boHit" column="bo_hit"/>
+		<collection property="tagList" resultMap="tagMap"/>
+	</resultMap>
+
+	<resultMap type="DDITTagVO" id="tagMap">
+		<result property="boNo" column="bo_no"/>
+		<result property="tag" column="tag"/>
+	</resultMap>	
+	
+	<insert id="insertForm" parameterType="DDITBoardVO" useGeneratedKeys="true">
+		<selectKey keyProperty="boNo" resultType="int" order="BEFORE">
+			select seq_dditboard.nextval from dual
+		</selectKey>
+		insert into dditboard (
+			bo_no, bo_title, bo_content, bo_writer, bo_date, bo_hit
+		) values (
+			#{boNo}, #{boTitle}, #{boContent}, #{boWriter}, sysdate, 0
+		)
+	</insert>
+	
+	<insert id="insertTags" parameterType="DDITTagVO">
+		insert into ddittag (
+			bo_no, tag
+		) values (
+			#{boNo}, #{tag}
+		)
+	</insert>
+	
+	<select id="selectBoardCount" parameterType="PaginationInfoVO" resultType="int">
+		select count(bo_no)
+		from dditboard
+		where 1=1
+		<include refid="boardSearch"/>
+	</select>
+	
+	<select id="selectList" parameterType="PaginationInfoVO" resultType="DDITBoardVO">
+		select
+			b.*
+		from (
+			select
+				a.*, row_number() over (order by a.bo_no desc) rnum
+			from (
+				select
+					bo_no, bo_title, bo_content, bo_writer, bo_date, bo_hit
+				from dditboard
+				where 1=1
+				<include refid="boardSearch"/>
+				order by bo_no desc
+				) a
+			) b
+		<![CDATA[
+		where b.rnum >= #{startRow} and b.rnum <= #{endRow}
+		]]>
+	</select>
+	
+	<update id="modifyForm" parameterType="DDITBoardVO">
+		update dditboard
+		set
+			bo_title = #{boTitle}, 
+			bo_content = #{boContent},
+			bo_date = sysdate
+		where bo_no = #{boNo}
+	</update>
+	<insert id="modifyTags" parameterType="DDITBoardVO">
+		insert into ddittag (
+			bo_no, tag
+		) values (
+			#{boNo}, #{tag}
+		)
+	</insert>
+	
+	<delete id="deleteTags" parameterType="int">
+		delete from ddittag
+		where bo_no = #{boNo}
+	</delete>
+	
+	<delete id="deleteForm" parameterType="int">
+		delete from dditboard
+		where bo_no = #{boNo}
+	</delete>
+	
+	
+</mapper>
